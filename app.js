@@ -13,6 +13,7 @@ const ExpressError = require('./utilities/ExpressError');
 const passport = require('passport');
 const localPassport = require('passport-local'); 
 const User = require('./models/users');
+const mongoSanitize = require('express-mongo-sanitize'); 
 
 const joi = require('joi');
 const {campgroundSchema, reviewSchema} = require('./schemas');
@@ -46,6 +47,7 @@ app.use(express.urlencoded({extended:true}));
 app.use(methodOverride('_method'));
 
 app.use(express.static(path.join(__dirname,'public')))
+app.use(mongoSanitize());
 
 const sessionOpt = {
     secret: 'SecretzIsSecret',
