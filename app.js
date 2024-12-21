@@ -1,6 +1,8 @@
-if(process.env.NODE_ENV != 'production'){
-    require('dotenv').config();
-}
+// if(process.env.NODE_ENV != 'production'){
+//     require('dotenv').config();
+// }
+
+require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
@@ -13,6 +15,7 @@ const ExpressError = require('./utilities/ExpressError');
 const passport = require('passport');
 const localPassport = require('passport-local'); 
 const User = require('./models/users');
+const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize'); 
 
 const joi = require('joi');
@@ -25,12 +28,18 @@ const campgroundRoutes = require('./routes/campgrounds');
 const reviewRoutes = require('./routes/reviews');
 
 const userRoutes = require('./routes/user')
-
+const MongoStore = require('connect-mongo');
 const mongoose = require('mongoose');
-mongoose.connect('mongodb://localhost:27017/yelp-camp');
+
+
+const dbUrl = process.env.MONGODB_URL  ||'mongodb://localhost:27017/yelp-camp';
+mongoose.connect(dbUrl);
+
+
 
 
 const app = express();
+
 
 const db = mongoose.connection;
 db.on('error',console.error.bind(console,'connection error'));
@@ -49,18 +58,76 @@ app.use(methodOverride('_method'));
 app.use(express.static(path.join(__dirname,'public')))
 app.use(mongoSanitize());
 
+
+const secret = process.env.SECRET || 'thisshouldbeabettersecret!';
+
+const store = MongoStore.create({
+    mongoUrl: dbUrl,
+    touchAfter: 24 * 60 * 60,
+    crypto: {
+        secret: 'thisshouldbeabettersecret!'
+    }
+});
+
 const sessionOpt = {
-    secret: 'SecretzIsSecret',
+    store: store,
+    secret,
     resave: false,
     saveUninitialized: true,
     cookie:{
         httpOnly: true,
+        // secure:true,
         expires:Date.now() + 1000 * 60 * 60 * 24 * 7 * 4 * 52,
         maxAge:1000 * 60 * 60 * 24 * 7 * 4 * 52,
     }
 }
 app.use(session(sessionOpt));   
 app.use(flash());
+app.use(helmet({contentSecurityPolicy:false}));
+
+const scriptSrcUrls = [
+    "https://stackpath.bootstrapcdn.com/",
+    "https://kit.fontawesome.com/",
+    "https://cdnjs.cloudflare.com/",
+    "https://cdn.jsdelivr.net",
+    "https://cdn.maptiler.com/", // add this
+];
+const styleSrcUrls = [
+    "https://kit-free.fontawesome.com/",
+    "https://stackpath.bootstrapcdn.com/",
+
+    "https://fonts.googleapis.com/",
+    "https://use.fontawesome.com/",
+    "https://cdn.jsdelivr.net",
+    "https://cdn.maptiler.com/", // add this
+];
+const connectSrcUrls = [
+    "https://api.maptiler.com/", // add this
+];
+
+const fontSrcUrls = [];
+app.use(
+    helmet.contentSecurityPolicy({
+        directives: {
+            defaultSrc: [],
+            connectSrc: ["'self'", ...connectSrcUrls],
+            scriptSrc: ["'unsafe-inline'", "'self'", ...scriptSrcUrls],
+            styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls],
+            workerSrc: ["'self'", "blob:"],
+            objectSrc: [],
+            imgSrc: [
+                "'self'",
+                "blob:",
+                "data:",
+                "https://res.cloudinary.com/dmgbecwzb/", //SHOULD MATCH YOUR CLOUDINARY ACCOUNT! 
+                "https://images.unsplash.com/",
+                "https://images3.alphacoders.com/151/thumb-1920-151005.jpg",
+                "https://wallpaperaccess.com/full/3654074.jpg"
+            ],
+            fontSrc: ["'self'", ...fontSrcUrls],
+        },
+    })
+);
 
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser()); 
